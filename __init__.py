@@ -90,7 +90,7 @@ class Plugin(QueryHandler):
         return TRIGGER
 
     def synopsis(self) -> str:
-        return '(NTFS|LDAP) <v>|<v>[unit]'
+        return 'LDAP <v>|<v>[unit]'
 
     def handleQuery(self, query: Query) -> None:
         query_str = query.string.strip()
@@ -98,7 +98,7 @@ class Plugin(QueryHandler):
         dt_strs, unit = [], None
 
         try:
-            matches = re.match(r'(?:NTFS|LDAP)\s+(\d+)$', query_str, re.IGNORECASE)
+            matches = re.match(r'LDAP\s+(\d+)$', query_str, re.IGNORECASE)
             if matches:
                 (timestamp_str,) = matches.groups()
                 timestamp = int(timestamp_str)
