@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta, timezone
 from typing import List
 
@@ -15,28 +16,35 @@ TRIGGER = 'dt'
 ICON_PATH = '/usr/share/icons/elementary/categories/64/preferences-system-time.svg'
 
 UNITS = ['seconds', 'milliseconds', 'microseconds', 'nanoseconds']
+UNITS_ABBREV = ['s', 'ms', 'us', 'ns']
 
 UNIX_EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
 
 
-def parse_unix_timestamp(timestamp: int, max_year: int = 9999) -> (datetime, int, str):
+def guess_unix_unit(timestamp: int, max_year: int = 9999) -> int:
     '''
     :param timestamp:
     :param max_year: Find the smallest resolution we can so `timestamp` is before this.
-    :return: `(dt, nanoseconds, unit)`
+    :return: `power`
     '''
     max_dt = datetime(max_year, 12, 31, tzinfo=timezone.utc)
     for power in 0, 3, 6, 9:
         seconds = timestamp // 10**power
-        nanoseconds = 10 ** (9 - power) * (timestamp % (10**power))
         try:
             dt = datetime.fromtimestamp(seconds, tz=timezone.utc)
             if dt <= max_dt or power == 9:
-                unit = UNITS[power // 3]
-                return dt, nanoseconds, unit
+                return power
         except (ValueError, OverflowError, OSError):
             continue
-    raise ValueError('Timestamp is too large or too small')
+    raise ValueError('datetime value out of range')
+
+
+def parse_unix_timestamp(timestamp: int, power: int) -> (datetime, int, str):
+    seconds = timestamp // 10**power
+    dt = datetime.fromtimestamp(seconds, tz=timezone.utc)
+    nanoseconds = 10 ** (9 - power) * (timestamp % (10**power))
+    unit = UNITS[power // 3]
+    return dt, nanoseconds, unit
 
 
 LOCAL_TZINFO = datetime.now().astimezone().tzinfo
@@ -82,24 +90,33 @@ class Plugin(QueryHandler):
         return TRIGGER
 
     def synopsis(self) -> str:
-        return '(NTFS|LDAP)? <epoch>'
+        return '(NTFS|LDAP) <v>|<v>[unit]'
 
     def handleQuery(self, query: Query) -> None:
-        terms = query.string.strip().split()
+        query_str = query.string.strip()
 
-        dt_strs, unit = [], ''
+        dt_strs, unit = [], None
 
         try:
-            if len(terms) == 2 and terms[0].upper() in ('NTFS', 'LDAP'):
-                timestamp = int(terms[1])
+            matches = re.match(r'(?:NTFS|LDAP)\s+(\d+)$', query_str, re.IGNORECASE)
+            if matches:
+                (timestamp_str,) = matches.groups()
+                timestamp = int(timestamp_str)
                 dt, ticks = parse_ntfs_timestamp(timestamp)
                 dt_strs = format_ntfs_timestamp(dt, ticks)
                 unit = '100 nanoseconds'
-            elif len(terms) == 1:
-                timestamp = int(query.string)
-                dt, nanoseconds, unit = parse_unix_timestamp(timestamp)
+
+            matches = re.match(r'(\d+)\s*(s|ms|us|ns)?$', query_str)
+            if matches:
+                timestamp_str, unit_abbrev = matches.groups()
+                timestamp = int(timestamp_str)
+                if unit_abbrev:
+                    power = 3 * UNITS_ABBREV.index(unit_abbrev)
+                else:
+                    power = guess_unix_unit(timestamp)
+                dt, nanoseconds, unit = parse_unix_timestamp(timestamp, power)
                 dt_strs = format_unix_timestamp(dt, nanoseconds)
-        except ValueError as e:
+        except (OverflowError, ValueError) as e:
             query.add(
                 Item(
                     id=md_name,
