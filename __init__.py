@@ -1,7 +1,6 @@
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List
 
 from albert import Action, Item, Query, QueryHandler, setClipboardText  # pylint: disable=import-error
 
@@ -51,7 +50,7 @@ def parse_unix_timestamp(timestamp: int, power: int) -> (datetime, int, str):
 LOCAL_TZINFO = datetime.now().astimezone().tzinfo
 
 
-def format_unix_timestamp(dt: datetime, nanoseconds: int) -> List[str]:
+def format_unix_timestamp(dt: datetime, nanoseconds: int) -> list[str]:
     fmt = f'%Y-%m-%d %H:%M:%S:{nanoseconds:09d} %z'
     return [
         dt.astimezone(LOCAL_TZINFO).strftime(fmt),
@@ -69,7 +68,7 @@ def parse_ntfs_timestamp(timestamp: int) -> (datetime, int):
     return dt, ticks
 
 
-def format_ntfs_timestamp(dt: datetime, ticks: int) -> List[str]:
+def format_ntfs_timestamp(dt: datetime, ticks: int) -> list[str]:
     fmt = f'%Y-%m-%d %H:%M:%S:{ticks:07d} %z'
     return [
         dt.astimezone(LOCAL_TZINFO).strftime(fmt),
