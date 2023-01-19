@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import List
 
 from albert import Action, Item, Query, QueryHandler, setClipboardText  # pylint: disable=import-error
@@ -13,7 +14,7 @@ md_url = 'https://github.com/stevenxxiu/albert_datetime_steven'
 md_maintainers = '@stevenxxiu'
 
 TRIGGER = 'dt'
-ICON_PATH = '/usr/share/icons/elementary/categories/64/preferences-system-time.svg'
+ICON_PATH = str(Path(__file__).parent / 'icons/datetime.png')
 
 UNITS = ['seconds', 'milliseconds', 'microseconds', 'nanoseconds']
 UNITS_ABBREV = ['s', 'ms', 'us', 'ns']
