@@ -100,7 +100,7 @@ class Plugin(QueryHandler):
         return TRIGGER
 
     def synopsis(self) -> str:
-        return '(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS]] [%z]>'
+        return '(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS|%NTFS_TICKS]] [%z]>'
 
     @staticmethod
     def parse_epoch(query_str: str, query: Query) -> bool:
@@ -148,8 +148,13 @@ class Plugin(QueryHandler):
         return bool(dt_strs)
 
     RE_DATETIME: re.Pattern = re.compile(
-        r'(?P<year>\d{1,4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})'
-        r'(?:\s+(?P<hour>\d{1,2}):(?P<minute>\d{1,2}):(?P<second>\d{1,2})(:(?P<nanosecond>\d{1,9}))?)?'
+        # Date
+        r'(?P<year>\d{1,4})-(?P<month>\d{2})-(?P<day>\d{2})'
+        # Time
+        r'(?:\s+'
+        r'(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(:(?:(?P<nanosecond>\d{9})|(?P<ntfs_ticks>\d{7})))?'
+        r')?'
+        # Timezone
         r'(?:\s+(?:'
         r'((?P<tz_fixed_sign>[+-])(?P<tz_fixed_hours>\d{2}):?(?P<tz_fixed_minutes>\d{2}))|'
         fr'(?P<tz_named>{"|".join(timezone for timezone in pytz.all_timezones)})'
@@ -163,16 +168,24 @@ class Plugin(QueryHandler):
         if not matches:
             return False
         matches_dict = matches.groupdict()
+
         dt = datetime(
             int(matches_dict['year']),
             int(matches_dict['month']),
             int(matches_dict['day']),
         )
+
         if matches_dict['hour'] is not None:
             dt = dt.replace(
                 hour=int(matches_dict['hour']), minute=int(matches_dict['minute']), second=int(matches_dict['second'])
             )
-        nanosecond = int(matches_dict['nanosecond'] or '0')
+
+        nanosecond = 0
+        if matches_dict['nanosecond'] is not None:
+            nanosecond = int(matches_dict['nanosecond'])
+        elif matches_dict['ntfs_ticks'] is not None:
+            nanosecond = int(matches_dict['ntfs_ticks']) * 100
+
         if matches_dict['tz_fixed_sign'] is not None:
             input_timezone = timedelta(
                 hours=int(matches_dict['tz_fixed_hours']), minutes=int(matches_dict['tz_fixed_minutes'])
