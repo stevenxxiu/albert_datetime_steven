@@ -2,6 +2,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytz
 from albert import Action, Item, Query, QueryHandler, setClipboardText  # pylint: disable=import-error
 
 
@@ -11,6 +12,7 @@ md_name = 'DateTime Steven'
 md_description = 'Convert between datetime strings and timestamps.'
 md_url = 'https://github.com/stevenxxiu/albert_datetime_steven'
 md_maintainers = '@stevenxxiu'
+md_lib_dependencies = ['pytz']
 
 TRIGGER = 'dt'
 ICON_PATH = str(Path(__file__).parent / 'icons/datetime.png')
@@ -58,6 +60,10 @@ def format_unix_timestamp(dt: datetime, nanoseconds: int) -> list[str]:
     ]
 
 
+def to_unix_timestamp(dt: datetime, nanoseconds: int) -> int:
+    return int(dt.timestamp()) * 10**9 + nanoseconds
+
+
 NFTS_EPOCH = datetime(1601, 1, 1, tzinfo=timezone.utc)
 
 
@@ -76,6 +82,10 @@ def format_ntfs_timestamp(dt: datetime, ticks: int) -> list[str]:
     ]
 
 
+def to_ntfs_timestamp(dt: datetime, nanoseconds: int) -> int:
+    return int((dt - NFTS_EPOCH).total_seconds()) * 10**7 + nanoseconds // 100
+
+
 class Plugin(QueryHandler):
     def id(self) -> str:
         return __name__
@@ -90,11 +100,10 @@ class Plugin(QueryHandler):
         return TRIGGER
 
     def synopsis(self) -> str:
-        return '(NT|NTFS|LDAP) <v>|<v>[unit]'
+        return '(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS]] [%z]>'
 
-    def handleQuery(self, query: Query) -> None:
-        query_str = query.string.strip()
-
+    @staticmethod
+    def parse_epoch(query_str: str, query: Query) -> bool:
         dt_strs, unit = [], None
 
         try:
@@ -124,7 +133,7 @@ class Plugin(QueryHandler):
                     icon=[ICON_PATH],
                 )
             )
-            return
+            return True
 
         for dt_str in dt_strs:
             query.add(
@@ -136,3 +145,73 @@ class Plugin(QueryHandler):
                     actions=[Action(md_name, 'Copy', lambda value_=dt_str: setClipboardText(value_))],
                 )
             )
+        return bool(dt_strs)
+
+    RE_DATETIME: re.Pattern = re.compile(
+        r'(?P<year>\d{1,4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})'
+        r'(?:\s+(?P<hour>\d{1,2}):(?P<minute>\d{1,2}):(?P<second>\d{1,2})(:(?P<nanosecond>\d{1,9}))?)?'
+        r'(?:\s+(?:'
+        r'((?P<tz_fixed_sign>[+-])(?P<tz_fixed_hours>\d{2}):?(?P<tz_fixed_minutes>\d{2}))|'
+        fr'(?P<tz_named>{"|".join(timezone for timezone in pytz.all_timezones)})'
+        r'))?',
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def parse_datetime(cls, query_str: str, query: Query) -> bool:
+        matches = cls.RE_DATETIME.match(query_str)
+        if not matches:
+            return False
+        matches_dict = matches.groupdict()
+        dt = datetime(
+            int(matches_dict['year']),
+            int(matches_dict['month']),
+            int(matches_dict['day']),
+        )
+        if matches_dict['hour'] is not None:
+            dt = dt.replace(
+                hour=int(matches_dict['hour']), minute=int(matches_dict['minute']), second=int(matches_dict['second'])
+            )
+        nanosecond = int(matches_dict['nanosecond'] or '0')
+        if matches_dict['tz_fixed_sign'] is not None:
+            input_timezone = timedelta(
+                hours=int(matches_dict['tz_fixed_hours']), minutes=int(matches_dict['tz_fixed_minutes'])
+            )
+            if matches_dict['tz_fixed_sign'] == '-':
+                input_timezone = -input_timezone
+            dt = dt.astimezone(timezone(input_timezone))
+        elif matches_dict['tz_named'] is not None:
+            dt = pytz.timezone(matches_dict['tz_named']).localize(dt)
+        else:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        timestamp_str = str(to_unix_timestamp(dt, nanosecond))
+        query.add(
+            Item(
+                id=f'{md_name}/unix',
+                text=timestamp_str,
+                subtext='Unix',
+                icon=[ICON_PATH],
+                actions=[Action(md_name, 'Copy', lambda value_=timestamp_str: setClipboardText(value_))],
+            )
+        )
+
+        timestamp_str = str(to_ntfs_timestamp(dt, nanosecond // 100))
+        query.add(
+            Item(
+                id=f'{md_name}/ntfs',
+                text=timestamp_str,
+                subtext='NTFS/LDAP',
+                icon=[ICON_PATH],
+                actions=[Action(md_name, 'Copy', lambda value_=timestamp_str: setClipboardText(value_))],
+            )
+        )
+
+        return True
+
+    def handleQuery(self, query: Query) -> None:
+        query_str = query.string.strip()
+        if self.parse_epoch(query_str, query):
+            return
+        if self.parse_datetime(query_str, query):
+            return
