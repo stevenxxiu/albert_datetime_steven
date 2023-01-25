@@ -119,7 +119,7 @@ class Plugin(QueryHandler):
         except (OverflowError, ValueError) as e:
             query.add(
                 Item(
-                    id=md_name,
+                    id=f'{md_name}/{e}',
                     text=str(e),
                     icon=[ICON_PATH],
                 )
@@ -129,7 +129,7 @@ class Plugin(QueryHandler):
         for dt_str in dt_strs:
             query.add(
                 Item(
-                    id=md_name,
+                    id=f'{md_name}/{dt_str}',
                     text=dt_str,
                     subtext=f'as {unit}',
                     icon=[ICON_PATH],
