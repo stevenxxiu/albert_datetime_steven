@@ -9,7 +9,7 @@ from albert import Action, Item, Query, QueryHandler, setClipboardText  # pylint
 md_iid = '0.5'
 md_version = '1.0'
 md_name = 'DateTime Steven'
-md_description = 'Convert between datetime strings and timestamps.'
+md_description = 'Convert between datetime strings and timestamps'
 md_url = 'https://github.com/stevenxxiu/albert_datetime_steven'
 md_maintainers = '@stevenxxiu'
 md_lib_dependencies = ['pytz']
