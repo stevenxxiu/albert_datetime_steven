@@ -1,3 +1,5 @@
+import enum
+import itertools
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -21,6 +23,13 @@ UNITS = ['seconds', 'milliseconds', 'microseconds', 'nanoseconds']
 UNITS_ABBREV = ['s', 'ms', 'us', 'ns']
 
 UNIX_EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
+
+
+class TimeStr(enum.IntEnum):
+    DATE = enum.auto()
+    NTFS_DATE = enum.auto()
+    UNIX_TIMESTAMP = enum.auto()
+    NTFS_TIMESTAMP = enum.auto()
 
 
 def guess_unix_unit(timestamp: int, max_year: int = 9999) -> int:
@@ -103,17 +112,70 @@ class Plugin(QueryHandler):
         return '(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS|%NTFS_TICKS]] [%z]>'
 
     @staticmethod
-    def parse_epoch(query_str: str, query: Query) -> bool:
-        dt_strs, unit = [], None
+    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: [TimeStr], query: Query) -> None:
+        item_defs = []
+        for timestamp_type in types:
+            match timestamp_type:
+                case TimeStr.DATE:
+                    item_defs.extend(zip(format_unix_timestamp(dt, nanoseconds), itertools.repeat('Date')))
+                case TimeStr.NTFS_DATE:
+                    item_defs.extend(
+                        zip(format_ntfs_timestamp(dt, nanoseconds // 100), itertools.repeat('NTFS/LDAP date'))
+                    )
+                case TimeStr.UNIX_TIMESTAMP:
+                    item_defs.append((str(to_unix_timestamp(dt, nanoseconds)), 'Unix timestamp'))
+                case TimeStr.NTFS_TIMESTAMP:
+                    item_defs.append((str(to_ntfs_timestamp(dt, nanoseconds)), 'NTFS/LDAP timestamp'))
 
+        for output_str, output_str_type in item_defs:
+            query.add(
+                Item(
+                    id=f'{md_name}/{output_str}',
+                    text=output_str,
+                    subtext=f'{output_str_type} (input as {input_type})',
+                    icon=[ICON_PATH],
+                    actions=[Action(md_name, 'Copy', lambda value_=output_str: setClipboardText(value_))],
+                )
+            )
+
+        # Copy all
+        headings = [output_str_type for _output_str, output_str_type in item_defs]
+        max_heading_len = max(len(heading) for heading in headings)
+        all_output_str = (
+            f'With input as {input_type}\n'
+            + '\n'.join(
+                [
+                    f'{heading:<{max_heading_len}}    {output_str}'
+                    for heading, (output_str, _output_str_type) in zip(headings, item_defs)
+                ]
+            )
+            + '\n'
+        )
+        query.add(
+            Item(
+                id=f'{md_name}/copy_all',
+                text='Copy All',
+                icon=[ICON_PATH],
+                actions=[Action(md_name, 'Copy', lambda: setClipboardText(all_output_str))],
+            )
+        )
+
+    @classmethod
+    def parse_epoch(cls, query_str: str, query: Query) -> bool:
         try:
             matches = re.match(r'(?:NT|NTFS|LDAP)\s+(\d+)$', query_str, re.IGNORECASE)
             if matches:
                 (timestamp_str,) = matches.groups()
                 timestamp = int(timestamp_str)
                 dt, ticks = parse_ntfs_timestamp(timestamp)
-                dt_strs = format_ntfs_timestamp(dt, ticks)
-                unit = '100 nanoseconds'
+                cls.add_items(
+                    dt,
+                    ticks * 100,
+                    'NTFS time in 100 nanoseconds',
+                    [TimeStr.NTFS_DATE, TimeStr.DATE, TimeStr.UNIX_TIMESTAMP],
+                    query,
+                )
+                return True
 
             matches = re.match(r'(\d+)\s*(s|ms|us|ns)?$', query_str)
             if matches:
@@ -124,7 +186,14 @@ class Plugin(QueryHandler):
                 else:
                     power = guess_unix_unit(timestamp)
                 dt, nanoseconds, unit = parse_unix_timestamp(timestamp, power)
-                dt_strs = format_unix_timestamp(dt, nanoseconds)
+                cls.add_items(
+                    dt,
+                    nanoseconds,
+                    f'Unix time in {unit}',
+                    [TimeStr.DATE, TimeStr.NTFS_DATE, TimeStr.UNIX_TIMESTAMP, TimeStr.NTFS_TIMESTAMP],
+                    query,
+                )
+                return True
         except (OverflowError, ValueError) as e:
             query.add(
                 Item(
@@ -134,18 +203,7 @@ class Plugin(QueryHandler):
                 )
             )
             return True
-
-        for dt_str in dt_strs:
-            query.add(
-                Item(
-                    id=f'{md_name}/{dt_str}',
-                    text=dt_str,
-                    subtext=f'as {unit}',
-                    icon=[ICON_PATH],
-                    actions=[Action(md_name, 'Copy', lambda value_=dt_str: setClipboardText(value_))],
-                )
-            )
-        return bool(dt_strs)
+        return False
 
     RE_DATETIME: re.Pattern = re.compile(
         # Date
@@ -180,11 +238,11 @@ class Plugin(QueryHandler):
                 hour=int(matches_dict['hour']), minute=int(matches_dict['minute']), second=int(matches_dict['second'])
             )
 
-        nanosecond = 0
+        nanoseconds = 0
         if matches_dict['nanosecond'] is not None:
-            nanosecond = int(matches_dict['nanosecond'])
+            nanoseconds = int(matches_dict['nanosecond'])
         elif matches_dict['ntfs_ticks'] is not None:
-            nanosecond = int(matches_dict['ntfs_ticks']) * 100
+            nanoseconds = int(matches_dict['ntfs_ticks']) * 100
 
         if matches_dict['tz_fixed_sign'] is not None:
             input_timezone = timedelta(
@@ -198,28 +256,22 @@ class Plugin(QueryHandler):
         else:
             dt = dt.replace(tzinfo=timezone.utc)
 
-        timestamp_str = str(to_unix_timestamp(dt, nanosecond))
-        query.add(
-            Item(
-                id=f'{md_name}/unix',
-                text=timestamp_str,
-                subtext='Unix',
-                icon=[ICON_PATH],
-                actions=[Action(md_name, 'Copy', lambda value_=timestamp_str: setClipboardText(value_))],
+        if matches_dict['ntfs_ticks'] is not None:
+            cls.add_items(
+                dt,
+                nanoseconds,
+                'date',
+                [TimeStr.NTFS_TIMESTAMP, TimeStr.UNIX_TIMESTAMP, TimeStr.NTFS_DATE, TimeStr.DATE],
+                query,
             )
-        )
-
-        timestamp_str = str(to_ntfs_timestamp(dt, nanosecond // 100))
-        query.add(
-            Item(
-                id=f'{md_name}/ntfs',
-                text=timestamp_str,
-                subtext='NTFS/LDAP',
-                icon=[ICON_PATH],
-                actions=[Action(md_name, 'Copy', lambda value_=timestamp_str: setClipboardText(value_))],
+        else:
+            cls.add_items(
+                dt,
+                nanoseconds,
+                'date',
+                [TimeStr.UNIX_TIMESTAMP, TimeStr.NTFS_TIMESTAMP, TimeStr.DATE, TimeStr.NTFS_DATE],
+                query,
             )
-        )
-
         return True
 
     def handleQuery(self, query: Query) -> None:
