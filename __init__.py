@@ -16,7 +16,6 @@ md_url = 'https://github.com/stevenxxiu/albert_datetime_steven'
 md_maintainers = '@stevenxxiu'
 md_lib_dependencies = ['pytz']
 
-TRIGGER = 'dt'
 ICON_PATH = str(Path(__file__).parent / 'icons/datetime.png')
 
 UNITS = ['seconds', 'milliseconds', 'microseconds', 'nanoseconds']
@@ -106,7 +105,7 @@ class Plugin(QueryHandler):
         return md_description
 
     def defaultTrigger(self) -> str:
-        return f'{TRIGGER} '
+        return 'dt '
 
     def synopsis(self) -> str:
         return '(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS|%NTFS_TICKS]] [%z]>'
