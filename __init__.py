@@ -1,7 +1,7 @@
 import enum
 import itertools
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytz
@@ -21,7 +21,7 @@ ICON_PATH = str(Path(__file__).parent / 'icons/datetime.png')
 UNITS = ['seconds', 'milliseconds', 'microseconds', 'nanoseconds']
 UNITS_ABBREV = ['s', 'ms', 'us', 'ns']
 
-UNIX_EPOCH = datetime.fromtimestamp(0, tz=timezone.utc)
+UNIX_EPOCH = datetime.fromtimestamp(0, tz=UTC)
 
 
 class TimeStr(enum.IntEnum):
@@ -37,11 +37,11 @@ def guess_unix_unit(timestamp: int, max_year: int = 9999) -> int:
     :param max_year: Find the smallest resolution we can so `timestamp` is before this.
     :return: `power`
     '''
-    max_dt = datetime(max_year, 12, 31, tzinfo=timezone.utc)
+    max_dt = datetime(max_year, 12, 31, tzinfo=UTC)
     for power in 0, 3, 6, 9:
         seconds = timestamp // 10**power
         try:
-            dt = datetime.fromtimestamp(seconds, tz=timezone.utc)
+            dt = datetime.fromtimestamp(seconds, tz=UTC)
             if dt <= max_dt or power == 9:
                 return power
         except (ValueError, OverflowError, OSError):
@@ -51,7 +51,7 @@ def guess_unix_unit(timestamp: int, max_year: int = 9999) -> int:
 
 def parse_unix_timestamp(timestamp: int, power: int) -> (datetime, int, str):
     seconds = timestamp // 10**power
-    dt = datetime.fromtimestamp(seconds, tz=timezone.utc)
+    dt = datetime.fromtimestamp(seconds, tz=UTC)
     nanoseconds = 10 ** (9 - power) * (timestamp % (10**power))
     unit = UNITS[power // 3]
     return dt, nanoseconds, unit
@@ -64,7 +64,7 @@ def format_unix_timestamp(dt: datetime, nanoseconds: int) -> list[str]:
     fmt = f'%Y-%m-%d %H:%M:%S:{nanoseconds:09d} %z'
     return [
         dt.astimezone(LOCAL_TZINFO).strftime(fmt),
-        dt.astimezone(timezone.utc).strftime(fmt),
+        dt.astimezone(UTC).strftime(fmt),
     ]
 
 
@@ -72,7 +72,7 @@ def to_unix_timestamp(dt: datetime, nanoseconds: int) -> int:
     return int(dt.timestamp()) * 10**9 + nanoseconds
 
 
-NFTS_EPOCH = datetime(1601, 1, 1, tzinfo=timezone.utc)
+NFTS_EPOCH = datetime(1601, 1, 1, tzinfo=UTC)
 
 
 def parse_ntfs_timestamp(timestamp: int) -> (datetime, int):
@@ -86,7 +86,7 @@ def format_ntfs_timestamp(dt: datetime, ticks: int) -> list[str]:
     fmt = f'%Y-%m-%d %H:%M:%S:{ticks:07d} %z'
     return [
         dt.astimezone(LOCAL_TZINFO).strftime(fmt),
-        dt.astimezone(timezone.utc).strftime(fmt),
+        dt.astimezone(UTC).strftime(fmt),
     ]
 
 
@@ -253,7 +253,7 @@ class Plugin(QueryHandler):
         elif matches_dict['tz_named'] is not None:
             dt = pytz.timezone(matches_dict['tz_named']).localize(dt)
         else:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
 
         if matches_dict['ntfs_ticks'] is not None:
             cls.add_items(
