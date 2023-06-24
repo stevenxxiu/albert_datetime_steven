@@ -5,11 +5,11 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytz
-from albert import Action, Item, Query, QueryHandler, setClipboardText  # pylint: disable=import-error
+from albert import Action, Item, TriggerQuery, TriggerQueryHandler, setClipboardText  # pylint: disable=import-error
 
 
-md_iid = '0.5'
-md_version = '1.0'
+md_iid = '1.0'
+md_version = '1.1'
 md_name = 'DateTime Steven'
 md_description = 'Convert between datetime strings and timestamps'
 md_url = 'https://github.com/stevenxxiu/albert_datetime_steven'
@@ -94,7 +94,7 @@ def to_ntfs_timestamp(dt: datetime, nanoseconds: int) -> int:
     return int((dt - NFTS_EPOCH).total_seconds()) * 10**7 + nanoseconds // 100
 
 
-class Plugin(QueryHandler):
+class Plugin(TriggerQueryHandler):
     def id(self) -> str:
         return __name__
 
@@ -111,7 +111,7 @@ class Plugin(QueryHandler):
         return '(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS|%NTFS_TICKS]] [%z]>'
 
     @staticmethod
-    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: [TimeStr], query: Query) -> None:
+    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: [TimeStr], query: TriggerQuery) -> None:
         item_defs = []
         for timestamp_type in types:
             match timestamp_type:
@@ -160,7 +160,7 @@ class Plugin(QueryHandler):
         )
 
     @classmethod
-    def parse_epoch(cls, query_str: str, query: Query) -> bool:
+    def parse_epoch(cls, query_str: str, query: TriggerQuery) -> bool:
         try:
             matches = re.match(r'(?:NT|NTFS|LDAP)\s+(\d+)$', query_str, re.IGNORECASE)
             if matches:
@@ -220,7 +220,7 @@ class Plugin(QueryHandler):
     )
 
     @classmethod
-    def parse_datetime(cls, query_str: str, query: Query) -> bool:
+    def parse_datetime(cls, query_str: str, query: TriggerQuery) -> bool:
         matches = cls.RE_DATETIME.match(query_str)
         if not matches:
             return False
@@ -273,7 +273,7 @@ class Plugin(QueryHandler):
             )
         return True
 
-    def handleQuery(self, query: Query) -> None:
+    def handleTriggerQuery(self, query: TriggerQuery) -> None:
         query_str = query.string.strip()
         if self.parse_epoch(query_str, query):
             return
