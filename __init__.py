@@ -5,18 +5,25 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytz
-from albert import Action, Item, TriggerQuery, TriggerQueryHandler, setClipboardText  # pylint: disable=import-error
+from albert import (  # pylint: disable=import-error
+    Action,
+    PluginInstance,
+    StandardItem,
+    TriggerQuery,
+    TriggerQueryHandler,
+    setClipboardText,
+)
 
 
-md_iid = '1.0'
-md_version = '1.1'
+md_iid = '2.0'
+md_version = '1.2'
 md_name = 'DateTime Steven'
 md_description = 'Convert between datetime strings and timestamps'
 md_url = 'https://github.com/stevenxxiu/albert_datetime_steven'
 md_maintainers = '@stevenxxiu'
 md_lib_dependencies = ['pytz']
 
-ICON_PATH = str(Path(__file__).parent / 'icons/datetime.png')
+ICON_URL = f'file:{Path(__file__).parent / "icons/datetime.png"}'
 
 UNITS = ['seconds', 'milliseconds', 'microseconds', 'nanoseconds']
 UNITS_ABBREV = ['s', 'ms', 'us', 'ns']
@@ -94,21 +101,17 @@ def to_ntfs_timestamp(dt: datetime, nanoseconds: int) -> int:
     return int((dt - NFTS_EPOCH).total_seconds()) * 10**7 + nanoseconds // 100
 
 
-class Plugin(TriggerQueryHandler):
-    def id(self) -> str:
-        return __name__
-
-    def name(self) -> str:
-        return md_name
-
-    def description(self) -> str:
-        return md_description
-
-    def defaultTrigger(self) -> str:
-        return 'dt '
-
-    def synopsis(self) -> str:
-        return '(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS|%NTFS_TICKS]] [%z]>'
+class Plugin(PluginInstance, TriggerQueryHandler):
+    def __init__(self):
+        TriggerQueryHandler.__init__(
+            self,
+            id=__name__,
+            name=md_name,
+            description=md_description,
+            synopsis='(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS|%NTFS_TICKS]] [%z]>',
+            defaultTrigger='dt ',
+        )
+        PluginInstance.__init__(self, extensions=[self])
 
     @staticmethod
     def add_items(dt: datetime, nanoseconds: int, input_type: str, types: [TimeStr], query: TriggerQuery) -> None:
@@ -128,11 +131,11 @@ class Plugin(TriggerQueryHandler):
 
         for output_str, output_str_type in item_defs:
             query.add(
-                Item(
+                StandardItem(
                     id=f'{md_name}/{output_str}',
                     text=output_str,
                     subtext=f'{output_str_type} (input as {input_type})',
-                    icon=[ICON_PATH],
+                    iconUrls=[ICON_URL],
                     actions=[Action(md_name, 'Copy', lambda value_=output_str: setClipboardText(value_))],
                 )
             )
@@ -151,10 +154,10 @@ class Plugin(TriggerQueryHandler):
             + '\n'
         )
         query.add(
-            Item(
+            StandardItem(
                 id=f'{md_name}/copy_all',
                 text='Copy All',
-                icon=[ICON_PATH],
+                iconUrls=[ICON_URL],
                 actions=[Action(md_name, 'Copy', lambda: setClipboardText(all_output_str))],
             )
         )
@@ -195,10 +198,10 @@ class Plugin(TriggerQueryHandler):
                 return True
         except (OverflowError, ValueError) as e:
             query.add(
-                Item(
+                StandardItem(
                     id=f'{md_name}/{e}',
                     text=str(e),
-                    icon=[ICON_PATH],
+                    iconUrls=[ICON_URL],
                 )
             )
             return True
