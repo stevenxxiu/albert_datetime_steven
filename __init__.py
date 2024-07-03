@@ -55,7 +55,7 @@ def guess_unix_unit(timestamp: int, max_year: int = 9999) -> int:
     raise ValueError('datetime value out of range')
 
 
-def parse_unix_timestamp(timestamp: int, power: int) -> (datetime, int, str):
+def parse_unix_timestamp(timestamp: int, power: int) -> tuple[datetime, int, str]:
     seconds = timestamp // 10**power
     dt = datetime.fromtimestamp(seconds, tz=UTC)
     nanoseconds = 10 ** (9 - power) * (timestamp % (10**power))
@@ -81,7 +81,7 @@ def to_unix_timestamp(dt: datetime, nanoseconds: int) -> int:
 NFTS_EPOCH = datetime(1601, 1, 1, tzinfo=UTC)
 
 
-def parse_ntfs_timestamp(timestamp: int) -> (datetime, int):
+def parse_ntfs_timestamp(timestamp: int) -> tuple[datetime, int]:
     ticks = timestamp % 10**7
     seconds = timestamp // 10**7
     dt = NFTS_EPOCH + timedelta(seconds=seconds)
@@ -113,7 +113,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         PluginInstance.__init__(self)
 
     @staticmethod
-    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: [TimeStr], query) -> None:
+    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: list[TimeStr], query) -> None:
         item_defs = []
         for timestamp_type in types:
             match timestamp_type:
