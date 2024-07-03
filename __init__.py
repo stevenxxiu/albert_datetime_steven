@@ -9,14 +9,13 @@ from albert import (  # pylint: disable=import-error
     Action,
     PluginInstance,
     StandardItem,
-    TriggerQuery,
     TriggerQueryHandler,
     setClipboardText,
 )
 
 
-md_iid = '2.0'
-md_version = '1.2'
+md_iid = '2.3'
+md_version = '1.3'
 md_name = 'DateTime Steven'
 md_description = 'Convert between datetime strings and timestamps'
 md_url = 'https://github.com/stevenxxiu/albert_datetime_steven'
@@ -111,10 +110,10 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             synopsis='(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS|%NTFS_TICKS]] [%z]>',
             defaultTrigger='dt ',
         )
-        PluginInstance.__init__(self, extensions=[self])
+        PluginInstance.__init__(self)
 
     @staticmethod
-    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: [TimeStr], query: TriggerQuery) -> None:
+    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: [TimeStr], query) -> None:
         item_defs = []
         for timestamp_type in types:
             match timestamp_type:
@@ -163,7 +162,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         )
 
     @classmethod
-    def parse_epoch(cls, query_str: str, query: TriggerQuery) -> bool:
+    def parse_epoch(cls, query_str: str, query) -> bool:
         try:
             matches = re.match(r'(?:NT|NTFS|LDAP)\s+(\d+)$', query_str, re.IGNORECASE)
             if matches:
@@ -223,7 +222,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
     )
 
     @classmethod
-    def parse_datetime(cls, query_str: str, query: TriggerQuery) -> bool:
+    def parse_datetime(cls, query_str: str, query) -> bool:
         matches = cls.RE_DATETIME.match(query_str)
         if not matches:
             return False
@@ -276,7 +275,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             )
         return True
 
-    def handleTriggerQuery(self, query: TriggerQuery) -> None:
+    def handleTriggerQuery(self, query) -> None:
         query_str = query.string.strip()
         if self.parse_epoch(query_str, query):
             return
