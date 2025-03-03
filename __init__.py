@@ -13,7 +13,6 @@ from albert import (  # pylint: disable=import-error
     setClipboardText,
 )
 
-
 md_iid = '2.3'
 md_version = '1.3'
 md_name = 'DateTime Steven'
@@ -38,11 +37,11 @@ class TimeStr(enum.IntEnum):
 
 
 def guess_unix_unit(timestamp: int, max_year: int = 9999) -> int:
-    '''
+    """
     :param timestamp:
     :param max_year: Find the smallest resolution we can so `timestamp` is before this.
     :return: `power`
-    '''
+    """
     max_dt = datetime(max_year, 12, 31, tzinfo=UTC)
     for power in 0, 3, 6, 9:
         seconds = timestamp // 10**power
@@ -216,7 +215,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         # Timezone
         r'(?:\s+(?:'
         r'((?P<tz_fixed_sign>[+-])(?P<tz_fixed_hours>\d{2}):?(?P<tz_fixed_minutes>\d{2}))|'
-        fr'(?P<tz_named>{"|".join(timezone for timezone in pytz.all_timezones)})'
+        rf'(?P<tz_named>{"|".join(timezone for timezone in pytz.all_timezones)})'
         r'))?',
         re.IGNORECASE,
     )
