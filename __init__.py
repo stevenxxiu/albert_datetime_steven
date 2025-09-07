@@ -3,15 +3,19 @@ import itertools
 import re
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Callable, override
 
 import pytz
+from albert import setClipboardText  # pyright: ignore[reportUnknownVariableType]
 from albert import (
     Action,
     PluginInstance,
+    Query,
     StandardItem,
     TriggerQueryHandler,
-    setClipboardText,
 )
+
+setClipboardText: Callable[[str], None]
 
 md_iid = '3.0'
 md_version = '1.4'
@@ -56,9 +60,9 @@ def guess_unix_unit(timestamp: int, max_year: int = 9999) -> int:
 
 
 def parse_unix_timestamp(timestamp: int, power: int) -> tuple[datetime, int, str]:
-    seconds = timestamp // 10**power
+    seconds: int = timestamp // 10**power  # pyright: ignore[reportAny]
     dt = datetime.fromtimestamp(seconds, tz=UTC)
-    nanoseconds = 10 ** (9 - power) * (timestamp % (10**power))
+    nanoseconds: int = 10 ** (9 - power) * (timestamp % (10**power))  # pyright: ignore[reportAny]
     unit = UNITS[power // 3]
     return dt, nanoseconds, unit
 
@@ -105,15 +109,17 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         PluginInstance.__init__(self)
         TriggerQueryHandler.__init__(self)
 
+    @override
     def synopsis(self, _query: str) -> str:
         return '(NT|NTFS|LDAP) <v>|<v>[unit]|<%Y-%m-%d [%H:%M:%S:[%NS|%NTFS_TICKS]] [%z]>'
 
+    @override
     def defaultTrigger(self):
         return 'dt '
 
     @staticmethod
-    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: list[TimeStr], query) -> None:
-        item_defs = []
+    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: list[TimeStr], query: Query) -> None:
+        item_defs: list[tuple[str, str]] = []
         for timestamp_type in types:
             match timestamp_type:
                 case TimeStr.DATE:
@@ -128,13 +134,14 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                     item_defs.append((str(to_ntfs_timestamp(dt, nanoseconds)), 'NTFS/LDAP timestamp'))
 
         for output_str, output_str_type in item_defs:
-            query.add(
+            copy_call: Callable[[str], None] = lambda value_=output_str: setClipboardText(value_)  # noqa: E731
+            query.add(  # pyright: ignore[reportUnknownMemberType]
                 StandardItem(
                     id=f'{md_name}/{output_str}',
                     text=output_str,
                     subtext=f'{output_str_type} (input as {input_type})',
                     iconUrls=[ICON_URL],
-                    actions=[Action(md_name, 'Copy', lambda value_=output_str: setClipboardText(value_))],
+                    actions=[Action(md_name, 'Copy', copy_call)],
                 )
             )
 
@@ -151,7 +158,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             )
             + '\n'
         )
-        query.add(
+        query.add(  # pyright: ignore[reportUnknownMemberType]
             StandardItem(
                 id=f'{md_name}/copy_all',
                 text='Copy All',
@@ -161,7 +168,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         )
 
     @classmethod
-    def parse_epoch(cls, query_str: str, query) -> bool:
+    def parse_epoch(cls, query_str: str, query: Query) -> bool:
         try:
             matches = re.match(r'(?:NT|NTFS|LDAP)\s+(\d+)$', query_str, re.IGNORECASE)
             if matches:
@@ -195,7 +202,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 )
                 return True
         except (OverflowError, ValueError) as e:
-            query.add(
+            query.add(  # pyright: ignore[reportUnknownMemberType]
                 StandardItem(
                     id=f'{md_name}/{e}',
                     text=str(e),
@@ -205,23 +212,25 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             return True
         return False
 
-    RE_DATETIME: re.Pattern = re.compile(
+    RE_DATETIME: re.Pattern[str] = re.compile(
         # Date
         r'(?P<year>\d{1,4})-(?P<month>\d{2})-(?P<day>\d{2})'
+        +
         # Time
         r'(?:\s+'
-        r'(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(:(?:(?P<nanosecond>\d{9})|(?P<ntfs_ticks>\d{7})))?'
-        r')?'
+        + r'(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(:(?:(?P<nanosecond>\d{9})|(?P<ntfs_ticks>\d{7})))?'
+        + r')?'
+        +
         # Timezone
         r'(?:\s+(?:'
-        r'((?P<tz_fixed_sign>[+-])(?P<tz_fixed_hours>\d{2}):?(?P<tz_fixed_minutes>\d{2}))|'
-        rf'(?P<tz_named>{"|".join(timezone for timezone in pytz.all_timezones)})'
-        r'))?',
+        + r'((?P<tz_fixed_sign>[+-])(?P<tz_fixed_hours>\d{2}):?(?P<tz_fixed_minutes>\d{2}))|'
+        + rf'(?P<tz_named>{"|".join(timezone for timezone in pytz.all_timezones)})'
+        + r'))?',
         re.IGNORECASE,
     )
 
     @classmethod
-    def parse_datetime(cls, query_str: str, query) -> bool:
+    def parse_datetime(cls, query_str: str, query: Query) -> bool:
         matches = cls.RE_DATETIME.match(query_str)
         if not matches:
             return False
@@ -274,7 +283,8 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             )
         return True
 
-    def handleTriggerQuery(self, query) -> None:
+    @override
+    def handleTriggerQuery(self, query: Query) -> None:
         query_str = query.string.strip()
         if self.parse_epoch(query_str, query):
             return
