@@ -12,6 +12,7 @@ import pytz
 from albert import setClipboardText  # pyright: ignore[reportUnknownVariableType]
 from albert import (
     Action,
+    Item,
     PluginInstance,
     Query,
     StandardItem,
@@ -120,7 +121,8 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         return 'dt '
 
     @staticmethod
-    def add_items(dt: datetime, nanoseconds: int, input_type: str, types: list[TimeStr], query: Query) -> None:
+    def create_items(dt: datetime, nanoseconds: int, input_type: str, types: list[TimeStr]) -> list[Item]:
+        items: list[Item] = []
         item_defs: list[tuple[str, str]] = []
         for timestamp_type in types:
             match timestamp_type:
@@ -137,15 +139,14 @@ class Plugin(PluginInstance, TriggerQueryHandler):
 
         for output_str, output_str_type in item_defs:
             copy_call: Callable[[str], None] = lambda value_=output_str: setClipboardText(value_)  # noqa: E731
-            query.add(  # pyright: ignore[reportUnknownMemberType]
-                StandardItem(
-                    id=f'{md_name}/{output_str}',
-                    text=output_str,
-                    subtext=f'{output_str_type} (input as {input_type})',
-                    iconUrls=[ICON_URL],
-                    actions=[Action(md_name, 'Copy', copy_call)],
-                )
+            item = StandardItem(
+                id=f'{md_name}/{output_str}',
+                text=output_str,
+                subtext=f'{output_str_type} (input as {input_type})',
+                iconUrls=[ICON_URL],
+                actions=[Action(md_name, 'Copy', copy_call)],
             )
+            items.append(item)
 
         # Copy all
         headings = [output_str_type for _output_str, output_str_type in item_defs]
@@ -160,59 +161,53 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             )
             + '\n'
         )
-        query.add(  # pyright: ignore[reportUnknownMemberType]
-            StandardItem(
-                id=f'{md_name}/copy_all',
-                text='Copy All',
-                iconUrls=[ICON_URL],
-                actions=[Action(md_name, 'Copy', lambda: setClipboardText(all_output_str))],
-            )
+        item = StandardItem(
+            id=f'{md_name}/copy_all',
+            text='Copy All',
+            iconUrls=[ICON_URL],
+            actions=[Action(md_name, 'Copy', lambda: setClipboardText(all_output_str))],
         )
+        items.append(item)
+        return items
 
     @classmethod
-    def parse_epoch(cls, query_str: str, query: Query) -> bool:
+    def parse_epoch(cls, query_str: str) -> list[Item]:
         try:
             matches = re.match(r'(?:NT|NTFS|LDAP)\s+(\d+)$', query_str, re.IGNORECASE)
             if matches:
                 (timestamp_str,) = matches.groups()
                 timestamp = int(timestamp_str)
                 dt, ticks = parse_ntfs_timestamp(timestamp)
-                cls.add_items(
+                return cls.create_items(
                     dt,
                     ticks * 100,
                     'NTFS time in 100 nanoseconds',
                     [TimeStr.NTFS_DATE, TimeStr.DATE, TimeStr.UNIX_TIMESTAMP],
-                    query,
                 )
-                return True
 
             matches = re.match(r'(\d+)\s*(s|ms|us|ns)?$', query_str)
-            if matches:
-                timestamp_str, unit_abbrev = matches.groups()
-                timestamp = int(timestamp_str)
-                if unit_abbrev:
-                    power = 3 * UNITS_ABBREV.index(unit_abbrev)
-                else:
-                    power = guess_unix_unit(timestamp)
-                dt, nanoseconds, unit = parse_unix_timestamp(timestamp, power)
-                cls.add_items(
-                    dt,
-                    nanoseconds,
-                    f'Unix time in {unit}',
-                    [TimeStr.DATE, TimeStr.NTFS_DATE, TimeStr.UNIX_TIMESTAMP, TimeStr.NTFS_TIMESTAMP],
-                    query,
-                )
-                return True
-        except (OverflowError, ValueError) as e:
-            query.add(  # pyright: ignore[reportUnknownMemberType]
-                StandardItem(
-                    id=f'{md_name}/{e}',
-                    text=str(e),
-                    iconUrls=[ICON_URL],
-                )
+            if not matches:
+                return []
+            timestamp_str, unit_abbrev = matches.groups()
+            timestamp = int(timestamp_str)
+            if unit_abbrev:
+                power = 3 * UNITS_ABBREV.index(unit_abbrev)
+            else:
+                power = guess_unix_unit(timestamp)
+            dt, nanoseconds, unit = parse_unix_timestamp(timestamp, power)
+            return cls.create_items(
+                dt,
+                nanoseconds,
+                f'Unix time in {unit}',
+                [TimeStr.DATE, TimeStr.NTFS_DATE, TimeStr.UNIX_TIMESTAMP, TimeStr.NTFS_TIMESTAMP],
             )
-            return True
-        return False
+        except (OverflowError, ValueError) as e:
+            item = StandardItem(
+                id=f'{md_name}/{e}',
+                text=str(e),
+                iconUrls=[ICON_URL],
+            )
+            return [item]
 
     RE_DATETIME: re.Pattern[str] = re.compile(
         # Date
@@ -232,10 +227,10 @@ class Plugin(PluginInstance, TriggerQueryHandler):
     )
 
     @classmethod
-    def parse_datetime(cls, query_str: str, query: Query) -> bool:
+    def parse_datetime(cls, query_str: str) -> list[Item]:
         matches = cls.RE_DATETIME.match(query_str)
         if not matches:
-            return False
+            return []
         matches_dict = matches.groupdict()
 
         dt = datetime(
@@ -268,27 +263,26 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             dt = dt.replace(tzinfo=UTC)
 
         if matches_dict['ntfs_ticks'] is not None:
-            cls.add_items(
+            return cls.create_items(
                 dt,
                 nanoseconds,
                 'date',
                 [TimeStr.NTFS_TIMESTAMP, TimeStr.UNIX_TIMESTAMP, TimeStr.NTFS_DATE, TimeStr.DATE],
-                query,
             )
         else:
-            cls.add_items(
+            return cls.create_items(
                 dt,
                 nanoseconds,
                 'date',
                 [TimeStr.UNIX_TIMESTAMP, TimeStr.NTFS_TIMESTAMP, TimeStr.DATE, TimeStr.NTFS_DATE],
-                query,
             )
-        return True
 
     @override
     def handleTriggerQuery(self, query: Query) -> None:
         query_str = query.string.strip()
-        if self.parse_epoch(query_str, query):
-            return
-        if self.parse_datetime(query_str, query):
-            return
+        items = []
+        if not items:
+            items = self.parse_epoch(query_str)
+        if not items:
+            items = self.parse_datetime(query_str)
+        query.add(items)  # pyright: ignore[reportUnknownMemberType]
