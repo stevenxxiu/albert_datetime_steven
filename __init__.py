@@ -1,9 +1,12 @@
 import enum
 import itertools
 import re
+import sys
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, override
+
+sys.path.insert(1, str(next(Path(__file__).parent.glob('__pypackages__/*/lib'))))
 
 import pytz
 from albert import setClipboardText  # pyright: ignore[reportUnknownVariableType]
@@ -24,7 +27,6 @@ md_description = 'Convert between datetime strings and timestamps'
 md_license = 'MIT'
 md_url = 'https://github.com/stevenxxiu/albert_datetime_steven'
 md_authors = ['@stevenxxiu']
-md_lib_dependencies = ['pytz']
 
 ICON_URL = f'file:{Path(__file__).parent / "icons/datetime.png"}'
 
