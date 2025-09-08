@@ -108,7 +108,7 @@ def to_ntfs_timestamp(dt: datetime, nanoseconds: int) -> int:
 
 
 class Plugin(PluginInstance, TriggerQueryHandler):
-    def __init__(self):
+    def __init__(self) -> None:
         PluginInstance.__init__(self)
         TriggerQueryHandler.__init__(self)
 
@@ -120,8 +120,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
     def defaultTrigger(self):
         return 'dt '
 
-    @staticmethod
-    def create_items(dt: datetime, nanoseconds: int, input_type: str, types: list[TimeStr]) -> list[Item]:
+    def create_items(self, dt: datetime, nanoseconds: int, input_type: str, types: list[TimeStr]) -> list[Item]:
         items: list[Item] = []
         item_defs: list[tuple[str, str]] = []
         for timestamp_type in types:
@@ -140,7 +139,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         for output_str, output_str_type in item_defs:
             copy_call: Callable[[str], None] = lambda value_=output_str: setClipboardText(value_)  # noqa: E731
             item = StandardItem(
-                id=f'{md_name}/{output_str}',
+                id=self.id(),
                 text=output_str,
                 subtext=f'{output_str_type} (input as {input_type})',
                 iconUrls=[ICON_URL],
@@ -162,7 +161,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             + '\n'
         )
         item = StandardItem(
-            id=f'{md_name}/copy_all',
+            id=self.id(),
             text='Copy All',
             iconUrls=[ICON_URL],
             actions=[Action(md_name, 'Copy', lambda: setClipboardText(all_output_str))],
@@ -170,15 +169,14 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         items.append(item)
         return items
 
-    @classmethod
-    def parse_epoch(cls, query_str: str) -> list[Item]:
+    def parse_epoch(self, query_str: str) -> list[Item]:
         try:
             matches = re.match(r'(?:NT|NTFS|LDAP)\s+(\d+)$', query_str, re.IGNORECASE)
             if matches:
                 (timestamp_str,) = matches.groups()
                 timestamp = int(timestamp_str)
                 dt, ticks = parse_ntfs_timestamp(timestamp)
-                return cls.create_items(
+                return self.create_items(
                     dt,
                     ticks * 100,
                     'NTFS time in 100 nanoseconds',
@@ -195,7 +193,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             else:
                 power = guess_unix_unit(timestamp)
             dt, nanoseconds, unit = parse_unix_timestamp(timestamp, power)
-            return cls.create_items(
+            return self.create_items(
                 dt,
                 nanoseconds,
                 f'Unix time in {unit}',
@@ -203,7 +201,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             )
         except (OverflowError, ValueError) as e:
             item = StandardItem(
-                id=f'{md_name}/{e}',
+                id=self.id(),
                 text=str(e),
                 iconUrls=[ICON_URL],
             )
@@ -226,9 +224,8 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         re.IGNORECASE,
     )
 
-    @classmethod
-    def parse_datetime(cls, query_str: str) -> list[Item]:
-        matches = cls.RE_DATETIME.match(query_str)
+    def parse_datetime(self, query_str: str) -> list[Item]:
+        matches = self.RE_DATETIME.match(query_str)
         if not matches:
             return []
         matches_dict = matches.groupdict()
@@ -263,14 +260,14 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             dt = dt.replace(tzinfo=UTC)
 
         if matches_dict['ntfs_ticks'] is not None:
-            return cls.create_items(
+            return self.create_items(
                 dt,
                 nanoseconds,
                 'date',
                 [TimeStr.NTFS_TIMESTAMP, TimeStr.UNIX_TIMESTAMP, TimeStr.NTFS_DATE, TimeStr.DATE],
             )
         else:
-            return cls.create_items(
+            return self.create_items(
                 dt,
                 nanoseconds,
                 'date',
