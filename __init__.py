@@ -17,11 +17,12 @@ from albert import (
     Query,
     StandardItem,
     TriggerQueryHandler,
+    makeImageIcon,
 )
 
 setClipboardText: Callable[[str], None]
 
-md_iid = '3.0'
+md_iid = '4.0'
 md_version = '1.4'
 md_name = 'DateTime Steven'
 md_description = 'Convert between datetime strings and timestamps'
@@ -29,7 +30,7 @@ md_license = 'MIT'
 md_url = 'https://github.com/stevenxxiu/albert_datetime_steven'
 md_authors = ['@stevenxxiu']
 
-ICON_URL = f'file:{Path(__file__).parent / "icons/datetime.png"}'
+ICON_PATH = Path(__file__).parent / 'icons/datetime.png'
 
 UNITS = ['seconds', 'milliseconds', 'microseconds', 'nanoseconds']
 UNITS_ABBREV = ['s', 'ms', 'us', 'ns']
@@ -142,7 +143,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 id=self.id(),
                 text=output_str,
                 subtext=f'{output_str_type} (input as {input_type})',
-                iconUrls=[ICON_URL],
+                icon_factory=lambda: makeImageIcon(ICON_PATH),
                 actions=[Action(md_name, 'Copy', copy_call)],
             )
             items.append(item)
@@ -163,7 +164,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         item = StandardItem(
             id=self.id(),
             text='Copy All',
-            iconUrls=[ICON_URL],
+            icon_factory=lambda: makeImageIcon(ICON_PATH),
             actions=[Action(md_name, 'Copy', lambda: setClipboardText(all_output_str))],
         )
         items.append(item)
@@ -203,7 +204,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             item = StandardItem(
                 id=self.id(),
                 text=str(e),
-                iconUrls=[ICON_URL],
+                icon_factory=lambda: makeImageIcon(ICON_PATH),
             )
             return [item]
 
