@@ -140,11 +140,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         for output_str, output_str_type in item_defs:
             copy_call: Callable[[str], None] = lambda value_=output_str: setClipboardText(value_)  # noqa: E731
             item = StandardItem(
-                id=self.id(),
+                id=f'{input_type}/{output_str_type}',
                 text=output_str,
                 subtext=f'{output_str_type} (input as {input_type})',
                 icon_factory=lambda: makeImageIcon(ICON_PATH),
-                actions=[Action(md_name, 'Copy', copy_call)],
+                actions=[Action('copy', 'Copy', copy_call)],
             )
             items.append(item)
 
@@ -162,10 +162,10 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             + '\n'
         )
         item = StandardItem(
-            id=self.id(),
+            id='all',
             text='Copy All',
             icon_factory=lambda: makeImageIcon(ICON_PATH),
-            actions=[Action(md_name, 'Copy', lambda: setClipboardText(all_output_str))],
+            actions=[Action('copy', 'Copy', lambda: setClipboardText(all_output_str))],
         )
         items.append(item)
         return items
@@ -202,7 +202,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             )
         except (OverflowError, ValueError) as e:
             item = StandardItem(
-                id=self.id(),
+                id='error',
                 text=str(e),
                 icon_factory=lambda: makeImageIcon(ICON_PATH),
             )
