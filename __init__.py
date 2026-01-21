@@ -1,29 +1,27 @@
 import enum
 import itertools
 import re
-import sys
+import zoneinfo
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, override
 
-sys.path.insert(1, str(next(Path(__file__).parent.glob('__pypackages__/*/lib'))))
-
-import pytz
 from albert import setClipboardText  # pyright: ignore[reportUnknownVariableType]
 from albert import (
     Action,
+    GeneratorQueryHandler,
+    Icon,
     Item,
     PluginInstance,
-    Query,
+    QueryContext,
     StandardItem,
-    TriggerQueryHandler,
-    makeImageIcon,
 )
 
 setClipboardText: Callable[[str], None]
 
-md_iid = '4.0'
-md_version = '1.4'
+md_iid = '5.0'
+md_version = '1.5'
 md_name = 'DateTime Steven'
 md_description = 'Convert between datetime strings and timestamps'
 md_license = 'MIT'
@@ -108,10 +106,10 @@ def to_ntfs_timestamp(dt: datetime, nanoseconds: int) -> int:
     return int((dt - NFTS_EPOCH).total_seconds()) * 10**7 + nanoseconds // 100
 
 
-class Plugin(PluginInstance, TriggerQueryHandler):
+class Plugin(PluginInstance, GeneratorQueryHandler):
     def __init__(self) -> None:
         PluginInstance.__init__(self)
-        TriggerQueryHandler.__init__(self)
+        GeneratorQueryHandler.__init__(self)
 
     @override
     def synopsis(self, _query: str) -> str:
@@ -143,7 +141,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 id=f'{input_type}/{output_str_type}',
                 text=output_str,
                 subtext=f'{output_str_type} (input as {input_type})',
-                icon_factory=lambda: makeImageIcon(ICON_PATH),
+                icon_factory=lambda: Icon.image(ICON_PATH),
                 actions=[Action('copy', 'Copy', copy_call)],
             )
             items.append(item)
@@ -164,7 +162,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         item = StandardItem(
             id='all',
             text='Copy All',
-            icon_factory=lambda: makeImageIcon(ICON_PATH),
+            icon_factory=lambda: Icon.image(ICON_PATH),
             actions=[Action('copy', 'Copy', lambda: setClipboardText(all_output_str))],
         )
         items.append(item)
@@ -204,7 +202,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             item = StandardItem(
                 id='error',
                 text=str(e),
-                icon_factory=lambda: makeImageIcon(ICON_PATH),
+                icon_factory=lambda: Icon.image(ICON_PATH),
             )
             return [item]
 
@@ -220,7 +218,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
         # Timezone
         r'(?:\s+(?:'
         + r'((?P<tz_fixed_sign>[+-])(?P<tz_fixed_hours>\d{2}):?(?P<tz_fixed_minutes>\d{2}))|'
-        + rf'(?P<tz_named>{"|".join(timezone for timezone in pytz.all_timezones)})'
+        + rf'(?P<tz_named>{"|".join(re.escape(timezone) for timezone in zoneinfo.available_timezones())})'
         + r'))?',
         re.IGNORECASE,
     )
@@ -256,7 +254,7 @@ class Plugin(PluginInstance, TriggerQueryHandler):
                 input_timezone = -input_timezone
             dt = dt.astimezone(timezone(input_timezone))
         elif matches_dict['tz_named'] is not None:
-            dt = pytz.timezone(matches_dict['tz_named']).localize(dt)
+            dt = dt.astimezone(zoneinfo.ZoneInfo(matches_dict['tz_named']))
         else:
             dt = dt.replace(tzinfo=UTC)
 
@@ -276,11 +274,11 @@ class Plugin(PluginInstance, TriggerQueryHandler):
             )
 
     @override
-    def handleTriggerQuery(self, query: Query) -> None:
-        query_str = query.string.strip()
+    def items(self, ctx: QueryContext) -> Generator[list[Item]]:
+        query_str = ctx.query.strip()
         items = []
         if not items:
             items = self.parse_epoch(query_str)
         if not items:
             items = self.parse_datetime(query_str)
-        query.add(items)  # pyright: ignore[reportUnknownMemberType]
+        yield items
