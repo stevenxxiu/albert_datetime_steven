@@ -56,7 +56,7 @@ def guess_unix_unit(timestamp: int, max_year: int = 9999) -> int:
             dt = datetime.fromtimestamp(seconds, tz=UTC)
             if dt <= max_dt or power == 9:
                 return power
-        except (ValueError, OverflowError, OSError):
+        except ValueError, OverflowError, OSError:
             continue
     raise ValueError('datetime value out of range')
 
